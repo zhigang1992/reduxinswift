@@ -33,10 +33,17 @@ func mergeReducer<S, A>(reducers: ((S, A)->S)... ) -> (S, A) -> S {
 
 let todoReducer = mergeReducer(addTodo, toggleTodo)
 
-class Store {
-    // Initialize with Reducer and initial state
+class Store<State, Action> {
+    private(set) var state: State
+
+    typealias Reducer = (State, Action) -> State
+    private let reducer: Reducer
+
+    init (state: State, reducer: Reducer) {
+        self.state = state
+        self.reducer = reducer
+    }
     
-    // Accessor to state
     // Dispatch Actions
     // Subscription
 }
