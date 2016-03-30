@@ -45,17 +45,24 @@ let visibilityReducer: (Visibility, Action) -> Visibility = { s, a in
 }
 
 let appReducer: (TodoApp, Action) -> TodoApp = { s, a in
-    // How to combine reducers?
-    
+    return TodoApp(
+        todos: todoReducer(s.todos, a),
+        visibility: visibilityReducer(s.visibility, a)
+    )
 }
 //: ### Store
-let store = Store(state: [Todo](), reducer: todoReducer)
-_ = store.subscribe({
-    print($0)
+let initialState = TodoApp(todos: [], visibility: .Active)
+let store = Store(state: initialState, reducer: appReducer)
+_ = store.subscribe({ s in
+    print("=================")
+    print(s.todos.map({"\($0.completed ? "X" : "O") \($0.name)"}).joinWithSeparator("\n"))
+    print("----\(s.visibility)------")
+    print("=================\n")
 })
 
 store.dispatch(.AddTodo("Hello"))
 store.dispatch(.AddTodo("World"))
 store.dispatch(.Toggle(0))
+store.dispatch(.SetVisibility(.Completed))
 
 
