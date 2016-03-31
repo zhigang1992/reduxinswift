@@ -14,12 +14,15 @@ enum Visibility : Int {
 struct TodoApp {
     let todos: [Todo]
     let visibility: Visibility
+    let isLoading: Bool
 }
 
 enum Action {
     case AddTodo(String)
     case Toggle(Int)
     case SetVisibility(Visibility)
+    case StartLoading
+    case Loaded([Todo])
 }
 
 //: ### Reducers
@@ -44,48 +47,65 @@ let visibilityReducer: (Visibility, Action) -> Visibility = { s, a in
     return v
 }
 
-let appReducer: (TodoApp, Action) -> TodoApp = { s, a in
+let startLoading: (TodoApp, Action) -> TodoApp = { s, a in
+    guard case .StartLoading = a else { return s }
     return TodoApp(
-        todos: todoReducer(s.todos, a),
-        visibility: visibilityReducer(s.visibility, a)
+        todos: s.todos,
+        visibility: s.visibility,
+        isLoading: true
     )
 }
+
+let remoteTodoReducer: (TodoApp, Action) -> TodoApp = { s, a in
+    guard case .Loaded(let newTodos) = a else { return s }
+    return TodoApp(
+        todos: newTodos,
+        visibility: s.visibility,
+        isLoading: false
+    )
+}
+
+let syncReducer: (TodoApp, Action) -> TodoApp = { s, a in
+    return TodoApp(
+        todos: todoReducer(s.todos, a),
+        visibility: visibilityReducer(s.visibility, a),
+        isLoading: s.isLoading
+    )
+}
+
+let appReducer = mergeReducer(
+    remoteTodoReducer, startLoading, syncReducer
+)
 //: ### Store
-let initialState = TodoApp(todos: [], visibility: .Active)
+let initialState = TodoApp(
+    todos: [],
+    visibility: .Active,
+    isLoading: false
+)
+
 let store = Store(state: initialState, reducer: appReducer)
-
-extension Todo : TodoRenderable {}
-
-let todoVC: TodoViewController<Todo> = TodoViewController(
-    selection: {
-        store.dispatch(.Toggle($0.id))
-    }, newTodo: {
-        store.dispatch(.AddTodo($0))
-    }, visibilityChanged: {
-        if let v = Visibility(rawValue: $0) {
-            store.dispatch(.SetVisibility(v))
-    }
+store.subscribe({
+    print($0)
 })
 
-extension TodoApp {
-    var displayTodo: [Todo] {
-        switch self.visibility {
-        case .All: return self.todos
-        case .Active: return self.todos.filter({!$0.completed})
-        case .Completed: return self.todos.filter({$0.completed})
-        }
+
+extension Store {
+    func dispatch(actionCreator: ((Action)->Void, ()->State)->Void) {
+        actionCreator(self.dispatch, {self.state})
     }
 }
 
-func render(state: TodoApp) {
-    todoVC.items = state.displayTodo
-    todoVC.visibility.selectedSegmentIndex = state.visibility.rawValue
+import XCPlayground
+XCPlaygroundPage.currentPage.needsIndefiniteExecution = true
+
+func loadRemoteTodos(dispatcher:Action->Void, getState:()->TodoApp) {
+    guard !getState().isLoading else { return }
+    dispatcher(.StartLoading)
+    delay(2, closure: {
+        let remoteTodo = Todo(id: 0, name: "Async todo", completed: false)
+        dispatcher(.Loaded([remoteTodo]))
+    })
 }
 
-store.subscribe(render)
-render(store.state)
+store.dispatch(loadRemoteTodos)
 
-import UIKit
-import XCPlayground
-todoVC.view.frame = CGRect(x: 0, y: 0, width: 320, height: 500)
-XCPlaygroundPage.currentPage.liveView = todoVC.view
